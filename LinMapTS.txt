@@ -1,0 +1,1463 @@
+###############################################################################
+##
+## Routines for the implementation of LinMapTS
+##
+###############################################################################
+##
+## Authors: P.R.L. Alves, L.G.S.Duarte and L.A.C.P.da Mota
+## Version: 2.0, 20/09/2019
+##
+###############################################################################
+print(`_______________________________________________________________`);
+print(`_______________________________________________________________`);
+print(`LinMapTS Package Development, Version: 3.0, 20/09/2019`);
+print(`__________________________`);
+print(`Routines for the implementation of LinMapTS`);
+print(`__________________________`);
+print(`Authors: P.R.L. Alves, L.G.S.Duarte and L.A.C.P.da Mota`);
+print(`_______________________________________________________________`);
+print(`_______________________________________________________________`);
+###############################################################################
+##
+##    Index of Procedures:
+##
+##  -> LinGfiTS
+## 
+##  -> ConfiTS
+##
+##
+###############################################################################
+with (linalg):
+with (plots):
+with(Statistics):
+with(stats):
+with(stats[statplots]):
+infolevel[Statistics] := 1:
+###############################################################################
+LinGfiTS := proc(Vec,final)
+
+local ini,lp,degree,lag1,L,pt,f,analysis,m,func1,Res1,Res2,A,B,C,R,g1,g2,lp2,t,residq1,residq2,MY,Rsq1,chi;
+
+global a,b,X;
+
+b:=nops(Vec[1]);
+
+`LinGfiTS/analyser`([args],degree,L,pt,f,analysis,chi);
+
+lp:=[seq(seq(1+final-2*b*(1+b*L)+i+2*j*b*b,i=0..2*b-1),j=0..L)];
+
+
+#Constructs the matrix equation to be solved:
+
+
+m := [seq(select(has,f,a[i])/a[i],i=1..nops(f))];
+
+func1 := [seq([seq([seq(m[i]*m[j],i=1..nops(f))],j=1..nops(f))],k=1..nops(lp))];
+
+Res1 := evalf[50]([seq([seq(Vec[lp[j]][1]*m[i],j=1..nops(lp))],i=1..nops(f))]);
+
+Res2 := evalf[50]([seq([seq(X[i]=Vec[lp[j]-pt][i],i=1..b)],j=1..nops(lp))]);
+
+A := evalf[50](matrix(convert([seq(subs(Res2[i],func1[i]),i=1..nops(lp))],`+`)));
+
+B := evalf[50](vector([seq(convert([seq(subs(Res2[j],Res1[i][j]),j=1..nops(lp))],
+     `+`), i=1..nops(f))]));
+
+
+#This last step solves the matrix equation and returns the global map:
+
+
+C := evalf[20](linsolve(A,B));
+
+R := subs(seq(a[i]=C[i],i=1..nops(f)),f):
+
+
+if analysis = 1 then
+
+          print('``');
+          print(`The predictor for the global fittings has the functional form`);
+          print('``');
+          print(f);
+
+          print('``');
+          print(`List of reconstructed vectors in global fitting`);
+          print('``');
+          print(lp);
+
+   lp2 := [seq(lp[1]+i-1,i=1..lp[nops(lp)]-lp[1]+1)];
+
+   g1 := ScatterPlot(lp2, [seq(evalf(subs(seq(X[l]=Vec[lp2[j]-pt][l],l=1..b),R)),
+         j= 1 .. nops(lp2))], symbol = cross, symbolsize=16, color=red,
+         labels=[typeset("Data order"),typeset("X")],axes=boxed,
+         legendstyle = [font = ["ROMAN", 14], location = top], 
+         legend=typeset("Calculated"));
+
+   g2 := ScatterPlot(lp2, [seq(Vec[lp2[j]][1], j=1 .. nops(lp2))], symbol = circle,
+         color=blue,axes=boxed,symbolsize=16, color=blue,resolution=10000,legend=typeset("Actual value"),
+         legendstyle = [font = ["ROMAN", 14],location = top]);  
+
+print('``');
+print('``');
+print (display({g1,g2}));
+
+if analysis=1 then if chi <> 0 then ChiSquareGoodnessOfFitTest([seq(Vec[lp2[j]][1], j=1 .. nops(lp2))], [seq(evalf(subs(seq(X[l]=Vec[lp2[j]-pt][l],l=1..b),R)),
+         j= 1 .. nops(lp2))], level = 0.05); end if; end if;
+
+
+
+
+MY := evalf(convert([seq(Vec[lp2[j]][1], j=1 .. nops(lp2))],`+`)/nops(lp2));     
+residq1:=evalf([seq((Vec[lp2[j]][1]-evalf(subs(seq(X[l]=Vec[lp2[j]-pt][l],l=1..b),R)))^2,j=1..nops(lp2))]);
+residq2:=evalf([seq((Vec[lp2[j]][1]-MY)^2,j=1..nops(lp2))]);
+Rsq1:=evalf[5](1-convert(residq1,`+`)/convert(residq2,`+`));
+
+print('``');
+print('``');
+if analysis=1 then print(Rsquared=Rsq1); end if; 
+print('``');
+print('``');
+
+end if;
+
+
+RETURN(R);
+
+
+end:
+
+
+`LinGfiTS/analyser` := proc(Args,_degree,_L,_pt,_f,_analysis,_chi)
+local degree,L,pt,f,analysis,lp,chi;
+
+
+if has(Args,Degree) then 
+	degree := rhs(op(select(has,Args,Degree))) 
+else
+	degree := 2
+end if;
+
+
+if has(Args,Func) then
+        f := rhs(op(select(has,Args,Func)))
+else
+        f := convert([seq(a[i]*[op(convert([seq(expand((convert([seq(X[j],j=1..b)],
+             `+`))^i),i=1..degree)],`+`))][i]/[seq(coeffs([op(convert([seq(expand(
+             (convert([seq(X[j],j=1..b)],`+`))^i),i=1..degree)],`+`))][i]),i=1..
+              nops([op(convert([seq(expand((convert([seq(X[j],j=1..b)],`+`))^i),
+              i=1..degree)],`+`))]))][i],i=1..nops([op(convert([seq(expand(
+              (convert([seq(X[j],j=1..b)],`+`))^i),i=1..degree)],`+`))]))],`+`)
+end if;
+
+
+if has(Args,Level) then 
+	L := rhs(op(select(has,Args,Level))) 
+else
+	L := 5
+end if;
+
+
+if has(Args,PT) then 
+	pt := rhs(op(select(has,Args,PT))) 
+else
+	pt := 1
+end if;
+
+
+if has(Args,Analysis) then
+ 
+	analysis := rhs(op(select(has,Args,Analysis)))
+ 
+end if;
+
+if has(Args,ChiSquare) then
+ 
+	chi := rhs(op(select(has,Args,ChiSquare)))
+ 
+end if;
+
+
+_f := f;
+_degree := degree;
+_L := L;
+_pt := pt;
+_analysis := analysis;
+_chi     := chi;
+
+return(NULL);
+
+
+end:
+
+###############################################################################
+ConfiTS:= proc(f,Vec,final)
+
+local ini,lp,lag1,L,pt,graphic,g1,g2,lag2,erro,erro1,delta,m,h1,h2,gauss,t;
+
+global b, X;
+
+b:=nops(Vec[1]);
+
+
+`ConfiTS/analyser`([args],L,pt,analysis);
+
+
+lp:=[seq(seq(1+final-2*b*(1+b*L)+i+2*j*b*b,i=0..2*b-1),j=0..L)];
+
+
+
+#This step builds the necessary sequences and calculates the deviation
+
+
+erro1 := evalf[20]([seq(Vec[lp[j]][1]-evalf(subs(seq(X[i]=Vec[lp[j]-pt][i],i=1..b),
+         f)),j=1..nops(lp))]);
+
+erro := evalf(sqrt(convert([seq(erro1[i]*erro1[i],
+        i=1..nops(lp))],`+`)/(nops(lp)-1)));
+
+
+#The analysisical error analysis is performed
+
+
+if analysis =1 then
+
+
+          print('``');
+          print(`List of reconstructed vectors in global fitting`);
+          print('``');
+          print(lp);
+
+          print('``');
+          print(`The global map is`);
+          print('``');
+          print(f);
+
+
+
+delta := trunc((6*erro)/(3.49*erro*((nops(erro1))^(-1/3))));
+
+
+m := [seq(nops(SelectInRange(erro1,-3*erro+(6*erro/delta)*(i-1)..
+     -3*erro+(6*erro/delta)*(i))),i=1..delta)];
+
+
+h1 := [seq(Weight(-3+(6/delta)*(i-1)..-3+(6/delta)*i,m[i]/nops(lp)),i=1..delta)];
+
+
+h2 := histogram(h1, color=cyan);
+
+
+gauss := plot(stats[statevalf,pdf,normald], -3..3, color=red);
+
+
+t := plots[display]({h2,gauss});
+
+          print('``');
+          print(`Distribution of residuals in global mapping`);
+          print('``');
+         
+print(t);
+
+
+# The test of normality for the error distribution is applied and the routine
+# returns the calculated deviation
+
+
+print('``');
+print('``');
+if nops(erro1) < 2000 then ShapiroWilkWTest(erro1,level=.05); end if;
+
+
+end if;
+
+
+RETURN(erro);
+
+
+end:
+
+
+
+`ConfiTS/analyser` := proc(Args,_L,_pt,_analysis)
+
+local L,pt,analysis;
+
+
+if has(Args,Level) then 
+	L := rhs(op(select(has,Args,Level))) 
+else
+	L := 5
+end if;
+
+
+if has(Args,PT) then 
+	pt := rhs(op(select(has,Args,PT))) 
+else
+	pt := 1
+end if;
+
+
+if has(Args,Analysis) then
+ 
+	analysis := rhs(op(select(has,Args,Analysis)))
+ 
+end if;
+
+_L := L;
+_pt := pt;
+_analysis := analysis;
+
+
+return(NULL);
+
+
+end:
+
+###############################################################################
+##
+## Routines for the implementation of Time Series Analysis
+##
+###############################################################################
+##
+## Authors: P.R.L. Alves, L.G.S.Duarte and L.A.C.P. da Mota
+## Version: 3.0 29/04/2016
+##
+###############################################################################
+#print(`_______________________________________________________________`);
+#print(`_______________________________________________________________`);
+#print(`TimeS Package Development, Version:   3.0,  29/04/2016`);
+#print(`__________________________`);
+#print(`Routines for the implementation of Time Series Analysis`);
+#print(`__________________________`);
+#print(`Authors: P.R.L. Alves, L.G.S.Duarte and L.A.C.P. da Mota`);
+#print(`_______________________________________________________________`);
+#print(`_______________________________________________________________`);
+###############################################################################
+##
+##    Index of Procedures:
+##
+##  -> TS
+##  -> `TS/analyser`
+##  -> VecTS
+##  -> `VecTS/analyser`
+##  -> GfiTS
+##  -> `GfiTS/analyser`
+##  -> ForecasTS
+##  -> `ForecasTS/analyser`
+##  -> IforecasTS
+##  -> `IforecasTS/analyser`
+##  -> NIforecasTS
+##  -> AnalysTS
+##  -> GrafiTS
+##
+###############################################################################
+with(stats):
+with(plots):
+with(linalg):
+###############################################################################
+TS := proc()
+local data;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - Name of the ascii file with the time series.  
+#	  
+#    - Features:
+#         This routine generates a list with the data (the Time Series). 
+#
+#    - Output:
+#         A list with the data.
+##
+
+`TS/analyser`([args],data);
+
+return(data);
+
+end:
+###############################################################################
+`TS/analyser` := proc(Args,_data)
+local datafile,data;
+
+## Comment
+#
+#    - Entries:
+#         Args - Arguments (from TS procedure) passed.
+#
+#         _data - variable to be assigned.
+#
+#    - Features:
+#         This routine assignes the variable _data.
+#
+#    - Output:
+#         null.
+##
+
+if has(Args,DataFile) then 
+	datafile := rhs(op(select(has,Args,DataFile))) 
+else
+	datafile := Args[1]
+end if;
+
+data := readdata(datafile,1);
+
+_data := data;
+
+return(NULL);
+
+end:
+###############################################################################
+VecTS := proc()
+local timelag,dim,data,vects,i,j;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) the embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A with the time series. 
+#
+#    - Observations:
+#	  It must be understanding that although all entries to the VecTS 
+#	  procedure are optional, the call < [> VecTS(); > is not an option.  
+#
+#    - Features:
+#         This routine generates the vectors in a phase space with Dim
+#         dimensions.
+#
+#    - Output:
+#         A list of lists (the vectors).
+##
+
+`VecTS/analyser`([args],timelag,dim,data);
+
+vects := [];
+for i from 1+(dim-1)*timelag to nops(data) do
+	vects := [op(vects),[seq(data[i-(j-1)*timelag],j=1..dim)]];
+end do;
+
+vects := [seq([seq(0,i=1..dim)],j=1..(dim-1)*timelag),op(vects)];
+
+return(vects);
+
+end:
+###############################################################################
+`VecTS/analyser` := proc(Args,_timelag,_dim,_data)
+local timelag,dim,data;
+
+## Comment
+#
+#    - Entries:
+#         Args - Arguments (from VecTS procedure) passed.
+#
+#         _timelag,_dim,_data - variables to be assigned.
+#
+#    - Features:
+#         This routine assignes some parameters needed by the VecTS procedure.
+#
+#    - Output:
+#         null.
+##
+
+if has(Args,Dim) then 
+	dim := rhs(op(select(has,Args,Dim))) 
+else
+	# heuristic  -  testing
+	dim := 3
+end if;
+
+if has(Args,TimeLag) then 
+	timelag := rhs(op(select(has,Args,TimeLag))) 
+else
+	timelag := 2*dim
+end if;
+
+if has(Args,Data) then 
+	data := rhs(op(select(has,Args,Data))) 
+else
+	data := TS(op(Args));
+end if;
+
+_timelag := timelag;
+_dim := dim;
+_data := data;
+
+return(NULL);
+
+end:
+###############################################################################
+GfiTS := proc()
+local timelag,dim,vects,final,hp,degree,nmaps,i,mapg,
+P,j,np1,Ngroups,List_points,set_eqs,lsubs,pt;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping. 
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         PT = <integer> - (optional) This parameter specifies the prediction 
+#         time by choosing the order of the date will be forecasted.
+#
+#    - Observations:
+#	  It must be understanding that although all entries to the GfiTS 
+#	  procedure are optional, the call < [> GfiTS(); > is not an option.  
+#
+#    - Features:
+#         This routine calculates a global polynomial mapping fitting the data.
+#
+#    - Output:
+#         The mapping determined.
+##
+
+`GfiTS/analyser`([args],timelag,dim,vects,final,hp,degree,nmaps,pt);
+
+if nmaps <> 1 then
+	for i to nmaps do
+		mapg[i] := GfiTS(TimeLag=timelag,Dim=dim,Vects=vects,HP=hp,
+		Degree=degree,Final=final-i+1);
+	end do;
+	return add(mapg[i],i=1..nmaps)/nmaps;
+fi;
+
+
+#Generation of polynomials in the new version
+
+
+for j to dim do
+
+	P[j]:=convert([seq(a[i][j]*[op(convert([seq(expand((convert([seq(X[j],j=1..dim)],`+`))^i)
+           ,i=1..degree)],`+`))][i]/[seq(coeffs([op(convert([seq(expand((convert([seq(X[j],j=1..dim)],`+`))^i)
+           ,i=1..degree)],`+`))][i]),i=1..nops([op(convert([seq(expand((convert([seq(X[j],j=1..dim)],`+`))^i)
+           ,i=1..degree)],`+`))]))][i],i=1..nops([op(convert([seq(expand((convert([seq(X[j],j=1..dim)],`+`))^i)
+           ,i=1..degree)],`+`))]))],`+`);
+
+end do:
+
+
+np1:=nops(P[1]);	
+
+Ngroups:=trunc(hp*np1/timelag);        	
+	
+
+if Ngroups=0 then Ngroups := 1 fi;		
+List_points := [seq(seq(final-((Ngroups-1)*(timelag*dim)+timelag-1)+(j*(timelag*dim))+i,i=0..timelag-1),
+		j=0..Ngroups-1)];
+print(List_points);
+
+set_eqs:={};
+for i in List_points do
+	lsubs:={seq(X[j]=vects[i-pt][j],j=1..dim)};
+        for j from 1 to dim do
+		set_eqs:={op(set_eqs),(vects[i][j]-subs(lsubs,P[j]))^2};
+        od;
+od;
+			
+
+return subs(op(1,op(minimize(convert(set_eqs,`+`), location)[2])),P[1]); 
+
+end:
+###############################################################################
+`GfiTS/analyser` := proc(Args,_timelag,_dim,_vects,_final,_hp,_degree,
+_nmaps,_pt)
+local timelag,dim,data,vects,final,hp,degree,nmaps,pt;
+
+## Comment
+#
+#    - Entries:
+#         Args - Arguments (from VecTS procedure) passed.
+#
+#         _timelag,_dim,_vects,_inipoint,_hp,_degree,_nmaps - variables to
+#	  be assigned.
+#
+#    - Features:
+#         This routine assignes some parameters needed by the GfiTS procedure.
+#
+#    - Output:
+#         null.
+##
+
+if has(Args,Dim) then 
+	dim := rhs(op(select(has,Args,Dim))) 
+elif has(Args,Vects) then 
+	dim := nops(op(1,rhs(op(select(has,Args,Vects)))))
+else
+	# heuristic  -  testing
+	dim := 3
+end if;
+
+if has(Args,TimeLag) then 
+	timelag := rhs(op(select(has,Args,TimeLag))) 
+else
+	# heuristic  -  testing
+	timelag := 2*dim
+end if;
+
+if has(Args,Vects) then 
+	vects := rhs(op(select(has,Args,Vects))) 
+else
+	if has(Args,Data) then 
+		data := rhs(op(select(has,Args,Data))) 
+	else
+		data := TS(op(Args));
+	end if;
+	vects := VecTS(Dim=dim,TimeLag=timelag,Data=data);
+end if;
+
+if has(Args,Final) then 
+	final := rhs(op(select(has,Args,Final))) 
+else
+	final := nops(vects);
+end if;
+
+
+#  HP (Heuristic Parameter) - related to the number of vectors used in the 
+#  least square minimization method. The value '4' is the default.
+ 
+if has(Args,HP) then 
+	hp := rhs(op(select(has,Args,HP))) 
+else
+	# heuristic  -  testing
+	hp := 4;
+end if;
+
+if has(Args,Degree) then 
+	degree := rhs(op(select(has,Args,Degree))) 
+else
+	# heuristic  -  testing
+	degree := 2;
+end if;
+
+# Related to k-validation 
+
+if has(Args,Nmaps) then 
+	nmaps := rhs(op(select(has,Args,Nmaps))) 
+else
+	nmaps := 1;
+end if;
+
+if has(Args,PT) then 
+	pt := rhs(op(select(has,Args,PT))) 
+else
+	pt := 1;
+end if;
+
+_timelag := timelag;
+_dim := dim;
+_vects := vects;
+_final := final;
+_hp := hp;
+_degree := degree;
+_nmaps := nmaps;
+_pt := pt;
+
+return(NULL);
+
+end:
+###############################################################################
+ForecasTS := proc()
+local timelag,dim,data,vects,final,hp,degree,nmaps,map,position,lsubs,j;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping.  
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         PT = <integer> - (optional) This parameter specifies the prediction 
+#         time by choosing the order of the date will be forecasted.
+#
+#         Map = <expr> - (optional) The global mapping that will be used to 
+#         predict the next entrie to the one located in 'position'.
+#
+#         Position = <integer> - (optional) The position of the data (in the 
+#         time series) immediately before the one we want to predict.
+#
+#    - Observations:
+#	  It must be understanding that although all entries to the ForecasTS 
+#	  procedure are optional, the call < [> ForecasTS(); > is not an option.  
+#
+#    - Features:
+#         This routine makes a one-step prediction based on the results 
+#         produced by GfiTS (the next entrie to the one located in 'position').
+#
+#    - Output:
+#         The prediction.
+##
+
+`ForecasTS/analyser`([args],dim,vects,map,position);
+
+lsubs := {seq(X[j]=vects[position][j],j=1..dim)};
+
+return subs(lsubs,map);
+
+end:
+###############################################################################
+`ForecasTS/analyser` := proc(Args,_dim,_vects,_map,_position)
+local timelag,dim,data,vects,final,hp,degree,nmaps,map,position,pt;
+
+
+## Comment
+#
+#    - Entries:
+#         Args - Arguments (from ForecasTS procedure) passed.
+#
+#         _dim,_vects,_map,_position - variables to be assigned.
+#
+#    - Features:
+#         This routine assignes some parameters needed by the ForecasTS 
+#         procedure.
+#
+#    - Output:
+#         null.
+##
+
+if has(Args,Dim) then 
+	dim := rhs(op(select(has,Args,Dim))) 
+elif has(Args,Vects) then 
+	dim := nops(op(1,rhs(op(select(has,Args,Vects)))))
+else
+	# heuristic  -  testing
+	dim := 3
+end if;
+
+if has(Args,Vects) then 
+	vects := rhs(op(select(has,Args,Vects))) 
+else
+	if has(Args,TimeLag) then 
+		timelag := rhs(op(select(has,Args,TimeLag))) 
+	else
+		# heuristic  -  testing
+		timelag := 2*dim
+	end if;
+	if has(Args,Data) then 
+		data := rhs(op(select(has,Args,Data))) 
+	else
+		data := TS(op(Args));
+	end if;
+	vects := VecTS(Dim=dim,TimeLag=timelag,Data=data);
+end if;
+
+if has(Args,Map) then 
+	map := rhs(op(select(has,Args,Map))) 
+else
+
+	if has(Args,Final) then 
+	final := rhs(op(select(has,Args,Final))) 
+          else
+	final := nops(vects);
+          end if;
+	if has(Args,HP) then 
+		hp := rhs(op(select(has,Args,HP))) 
+	else
+		hp := 4;
+	end if;
+	if has(Args,Degree) then 
+		degree := rhs(op(select(has,Args,Degree))) 
+	else
+		degree := 2;
+	end if;
+	if has(Args,Nmaps) then 
+		nmaps := rhs(op(select(has,Args,Nmaps))) 
+	else
+		nmaps := 1;
+	end if;
+        if has(Args,PT) then 
+		pt := rhs(op(select(has,Args,PT))) 
+	else
+		pt := 1;
+	end if;
+	map := GfiTS(Vects=vects,Final=final,PT=pt);
+end if;
+
+if has(Args,Position) then 
+	position := rhs(op(select(has,Args,Position))) 
+else
+	position := nops(data);
+end if;
+
+
+_dim := dim;
+_vects := vects;
+_map := map;
+_position := position;
+
+return(NULL);
+
+end:
+###############################################################################
+IforecasTS := proc()
+local timelag,dim,data,vects,final,hp,degree,nmaps,map,position,npoints,pt,i,j,
+lsubs,delta,ok,xispe,correction,poptions,ts,sizets;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping.  
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         PT = <integer> - (optional) This parameter specifies the prediction 
+#         time by choosing the order of the date will be forecasted.
+#
+#         Map = <expr> - (optional) The global mapping that will be used to 
+#         predict the next entrie to the one located in 'position'.
+#
+#         Position = <integer> - (optional) The position of the data (in the 
+#         time series) immediately before the one we want to predict.
+#
+#         Npoints = <integer> - (optional) The number of points to be used
+#         to calculate the delta-functions.
+#
+#         Poptions = <0 / 1> - (optional) The option for Printing some 
+#         analysis about the prediction.
+#
+#         OK = <integer> - (optional) The number of points to be used to 
+#         improve the prediction.
+#
+#    - Observations:
+#         It must be understanding that although all entries to the IforecasTS 
+#         procedure are optional, the call < [> IforecasTS(); > is not an 
+#         option.
+#
+#    - Features:
+#	  This routine makes a one-step predicition improving the results 
+#         produced by ForecasTS (the next entrie to the one located in 
+#         'position').
+#
+#    - Output:
+#         The improved prediction.
+##
+
+`IforecasTS/analyser`([args],dim,timelag,vects,map,position,npoints,pt,delta,ok);
+
+if has([args],Poptions) then 
+	poptions := rhs(op(select(has,[args],Poptions))) 
+else
+	poptions := 0;
+end if;
+
+lsubs := {seq(X[j]=vects[position][j],j=1..dim)};
+xispe := subs(lsubs,map);
+correction := convert([seq(delta[i,position],i=0..ok)],`+`);
+
+ts := seq(vects[j][1],j=(dim-1)*timelag+1..nops(vects));
+sizets := max(ts) - min(ts);
+
+if poptions >= 1 then
+print(`Optimal k:`,____________,ok);
+print(`Value of the standard prediction:`,____________,xispe); 
+print(`Value of the improved prediction:`,____________,xispe + correction);
+if position<nops(vects) then 
+	print(`Real value of the time series:`,____________,
+	vects[position+pt][1]);
+	print(`Error of the standard prediction:`,____________,
+	abs((xispe-vects[position+pt][1])));
+	print(`Error of the improved prediction:`,____________,
+	abs((xispe+correction-vects[position+pt][1])));
+end if;
+end if;
+
+return(xispe+correction);
+
+end:
+###############################################################################
+`IforecasTS/analyser` := proc(Args,_dim,_timelag,_vects,_map,_position,
+_npoints,_pt,_delta,_ok)
+local timelag,dim,data,vects,final,hp,degree,nmaps,map,position,npoints,pt,
+delta,i,j,lsubs,ok;
+
+## Comment
+#
+#    - Entries:
+#         Args - Arguments (from ForecasTS procedure) passed.
+#
+#         _dim,_timelag,_vects,_map,_position,_npoints,_delta,_ok - variables 
+#         to be assigned.
+#
+#    - Features:
+#         This routine assignes some parameters needed by the IforecasTS 
+#         procedure.
+#
+#    - Output:
+#         null.
+##
+
+if has(Args,Vects) then 
+	vects := rhs(op(select(has,Args,Vects)));
+	dim := nops(vects[1]);
+        if has(Args,TimeLag) then 
+		timelag := rhs(op(select(has,Args,TimeLag))) 
+	else
+		timelag := 2*dim
+	end if;
+else
+	if has(Args,Dim) then 
+		dim := rhs(op(select(has,Args,Dim))) 
+	else
+		dim := 3
+	end if;
+	if has(Args,TimeLag) then 
+		timelag := rhs(op(select(has,Args,TimeLag))) 
+	else
+		timelag := 2*dim
+	end if;
+	if has(Args,Data) then 
+		data := rhs(op(select(has,Args,Data))) 
+	else
+		data := TS(op(Args));
+	end if;
+	vects := VecTS(Dim=dim,TimeLag=timelag,Data=data);
+end if;
+
+if has(Args,Map) then 
+	map := rhs(op(select(has,Args,Map))) 
+else
+	if has(Args,Final) then 
+	final := rhs(op(select(has,Args,Final))) 
+else
+	final := nops(vects);
+end if;
+	if has(Args,HP) then 
+		hp := rhs(op(select(has,Args,HP))) 
+	else
+		hp := 4;
+	end if;
+	if has(Args,Degree) then 
+		degree := rhs(op(select(has,Args,Degree))) 
+	else
+		degree := 2;
+	end if;
+	if has(Args,Nmaps) then 
+		nmaps := rhs(op(select(has,Args,Nmaps))) 
+	else
+		nmaps := 1;
+	end if;
+        if has(Args,PT) then 
+		pt := rhs(op(select(has,Args,PT))) 
+	else
+		pt := 1;
+	end if;
+	map := GfiTS(TimeLag=timelag,Dim=dim,Vects=vects,HP=hp,PT=pt,
+		Degree=degree,Final=final,Nmaps=nmaps);
+end if;
+
+if has(Args,Position) then 
+	position := rhs(op(select(has,Args,Position))) 
+else
+	position := nops(vects);
+end if;
+
+if has(Args,Npoints) then 
+	npoints := rhs(op(select(has,Args,Npoints))) 
+else
+	# heuristic  -  testing
+	npoints := 7;
+end if;
+
+if has(Args,PT) then 
+	pt := rhs(op(select(has,Args,PT))) 
+else
+	# heuristic  -  testing
+	pt := 1;
+end if;
+
+
+## Defining delta[0] (the epsilon function)
+
+for i from position by -pt to position - npoints*pt do
+        lsubs := {seq(X[j]=vects[i-pt][j],j=1..dim)};
+	delta[0,i] := vects[i][1] - subs(lsubs,map);
+        
+end do;
+
+for i to npoints do
+        
+	for j from position by -pt to position - npoints*pt + i*pt do
+                delta[i,j] := delta[i-1,j] - delta[i-1,j-pt];
+	end do;
+end do;
+
+
+
+## Calculating the optimal k
+
+for i to npoints do 
+	if abs(delta[i-1,position]) < abs(delta[i,position]) then 
+		ok := i-1; 
+		break;
+	else
+		ok := i;
+	end if;
+end do;
+
+
+
+
+ 
+if has(Args,OK) then 
+	ok := rhs(op(select(has,Args,OK))) 
+end if;
+
+_dim := dim;
+_timelag := timelag;
+_vects := vects;
+_map := map;
+_position := position;
+_npoints := npoints;
+_pt := pt;
+_delta := delta;
+_ok := ok;
+
+return(NULL);
+
+end:
+
+###############################################################################
+
+NIforecasTS := proc()
+local timelag,dim,data,vects,inipoint,hp,degree,nmaps,map,position,npoints,i,j,pt,
+lsubs,delta,ok,xispe,correction,poptions,nsteps,prev,nvects,ts,sizets;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping.  
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         Map = <expr> - (optional) The global mapping that will be used to 
+#         predict the next entry to the one located in 'position'.
+#
+#         Position = <integer> - (optional) The position of the data (in the 
+#         time series) immediately before the one we want to predict.
+#
+#         Npoints = <integer> - (optional) The number of points to be used
+#         to calculate the delta-functions.
+#
+#         Poptions = <0 / 1 / 2> - (optional) The option for Printing some 
+#         analysis about the prediction.
+#
+#         OK = <integer> - (optional) The number of points to be used to 
+#         improve the prediction.
+#
+#         Nsteps = <integer> - (optional) The number of steps to forecast.
+#
+#    - Observations:
+#         It must be understanding that although all entries to the NIforecasTS 
+#         procedure are optional, the call < [> NIforecasTS(); > is not an 
+#         option.
+#
+#    - Features:
+#	  This routine makes a N-step predicition improving the results 
+#         produced by ForecasTS (the Nsteps next entries to the one located in 
+#         'position').
+#
+#    - Output:
+#         The improved prediction.
+##
+
+`IforecasTS/analyser`([args],dim,timelag,vects,map,position,npoints,pt,delta,ok);
+
+if has([args],Poptions) then 
+	poptions := rhs(op(select(has,[args],Poptions))) 
+else
+	poptions := 0;
+end if;
+
+if has([args],Nsteps) then 
+	nsteps := rhs(op(select(has,[args],Nsteps))) 
+else
+	# heuristic  -  testing
+	nsteps := 3;
+end if;
+
+nvects := [seq([seq(vects[i][j],j=1..dim)],i=1..position)];
+
+for i to nsteps	 do
+	nvects := [op(nvects),[IforecasTS(Dim=dim,Vects=nvects,Map=map,
+		Position=position+i-1,Npoints=npoints,Poptions=0,OK=ok),
+		seq(nvects[i+position-(j-1)*timelag][1],j=2..dim)]];                
+        end do;
+
+prev := nvects[position+nsteps][1];
+
+ts := seq(vects[j][1],j=(dim-1)*timelag+1..nops(vects));
+sizets := max(ts) - min(ts);
+
+if poptions >= 1 and position+nsteps < nops(vects)+1 then 
+	print(`Optimal k:`,____________,ok);
+	print(`Value of the improved prediction:`,____________,prev);
+	if position+nsteps<nops(vects)+1 then 
+		print(`Real value of the time series:`,____________,
+		vects[position+nsteps][1]);
+		print(`Error of the improved prediction:`
+		,____________,abs((prev-vects[position+nsteps][1])));
+	end if;
+end if;
+
+if poptions = 2 and position+nsteps < nops(vects)+1 then 
+	for i from position+1 to position + nsteps do
+		print(nvects[i][1],_______,vects[i][1]);
+	end do;
+end if;
+
+if position+nsteps < nops(vects)+1 then
+        return([seq([nvects[i][1],vects[i][1],
+        abs(nvects[i][1]-vects[i][1])/sizets],i=position+1..position+nsteps)]);
+else
+        return([seq(nvects[i][1],i=position+1..position+nsteps)]);
+end if;
+
+end:
+
+###############################################################################
+AnalysTS := proc()
+local timelag,dim,data,vects,inipoint,hp,degree,nmaps,map,position,npoints,i,j,
+lsubs,delta,ok,xispe,correction,poptions,nsteps,prev,nvects,npan,interval,k,
+size_inter,ts,sizets,analysis,pt;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping.  
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         Map = <expr> - (optional) The global mapping that will be used to 
+#         predict the next entry to the one located in 'position'.
+#
+#         Position = <integer> - (optional) The position of the data (in the 
+#         time series) immediately before the one we want to predict.
+#
+#         Npoints = <integer> - (optional) The number of points to be used
+#         to calculate the delta-functions.
+#
+#         Poptions = <0 / 1> - (optional) The option for Printing some 
+#         analysis about the prediction.
+#
+#         OK = <integer> - (optional) The number of points to be used to 
+#         improve the prediction.
+#
+#         Nsteps = <integer> - (optional) The number of steps to forecast.
+#
+#         Npan = <integer> - (optional) The number of points to be used
+#         to analyse the series behavior.
+#
+#         Interval = <list[integer,integer]> - (optional) A list with two 
+#         integers: the position of the first and the last points of the 
+#         interval we want to analyse.
+#
+#    - Observations:
+#         It must be understanding that although all entries to the AnalysTS 
+#         procedure are optional, the call < [> AnalysTS(); > is not an 
+#         option.
+#
+#    - Features:
+#	  This routine makes an overall analysis of the time series.
+#
+#    - Output:
+#         The analysis data.
+##
+
+`IforecasTS/analyser`([args],dim,timelag,vects,map,position,npoints,pt,delta,ok);
+
+if has([args],Poptions) then 
+	poptions := rhs(op(select(has,[args],Poptions))) 
+else
+	poptions := 0;
+end if;
+
+if has([args],Nsteps) then 
+	nsteps := rhs(op(select(has,[args],Nsteps))) 
+else
+	# heuristic  -  testing
+	nsteps := 3;
+end if;
+
+if has([args],Npan) then 
+	npan := rhs(op(select(has,[args],Npan))) 
+else
+	# heuristic  -  testing
+	npan := 16;
+end if;
+
+if has([args],Interval) then 
+	interval := rhs(op(select(has,[args],Interval))) 
+else
+	interval := [(dim-1)*timelag+1+npoints,nops(vects)];
+end if;
+
+size_inter := trunc((interval[2]-interval[1])/npan); 
+ts := seq(vects[j][1],j=(dim-1)*timelag+1..nops(vects));
+sizets := max(ts) - min(ts);
+
+analysis := [];
+
+
+for k from interval[1] by size_inter while k < interval[2]-nsteps do
+        nvects := [seq([seq(vects[i][j],j=1..dim)],i=1..k)];
+        for i to nsteps do
+                nvects := [op(nvects),[IforecasTS(Dim=dim,Vects=nvects,Map=map,
+		Position=k+i-1,Npoints=npoints,Poptions=0,OK=ok),
+		seq(nvects[i+k-(j-1)*timelag][1],j=2..dim)]]
+        end do;
+        prev := nvects[k+nsteps][1];
+        if poptions >= 1 then 
+                print(`Optimal k:`,____________,ok);
+                print(`Value of the improved prediction:`,____________,prev);
+                if k+nsteps<nops(vects) then 
+                        print(`Real value of the time series:`,____________,
+                        vects[k+nsteps][1]);
+                        print(`Error of the improved prediction:`
+                        ,____________,abs((prev-vects[k+nsteps][1])));
+                end if;
+        end if;
+        if poptions = 2 then 
+                for i from k+1 to k + nsteps do
+                        print(nvects[i][1],_______,vects[i][1]);
+                end do;
+        end if;
+        analysis := [op(analysis),[seq([nvects[i][1],vects[i][1],
+        abs(nvects[i][1]-vects[i][1])],i=k+1..k+nsteps)]];
+end do;
+
+return(analysis);
+
+end:
+###############################################################################
+GrafiTS := proc()
+local timelag,dim,data,vects,inipoint,hp,degree,nmaps,map,position,npoints,i,j,
+lsubs,delta,ok,xispe,correction,poptions,nsteps,prev,nvects,npan,interval,k,
+size_inter,ns,tg,grafis,nif,Args,pt;
+
+## Comment
+#
+#    - Entries:
+#         DataFile = <string> - (optional) Name of the ascii file with the time 
+#	  series.
+#
+#         TimeLag = <integer> - (optional) The integer that determines how far 
+#	  one has to space data points in order that they are not correlated.
+#
+#         Dim = <integer> - (optional) The embedding dimension.
+#
+#	  Data = <list[integer]> - (optional) A list with the time series. 
+#         
+#	  Vects = <list[lists]> - (optional) The vectors (list of lists).
+#
+#         Final = <integer> - (optional) Specifies the number that  
+#	  locates the position of the last vector to be used to construct the 
+#	  global mapping.  
+#
+#	  HP = <integer> - (optional) A number associated with the number of 
+#	  vectors used to construct the global mapping.
+#
+#         Degree = <integer> - (optional) The degree of the polynomial fitting.
+#
+#         Nmaps = <integer> - (optional) The number of maps used to perform the 
+#	  k-validation.
+#
+#         Map = <expr> - (optional) The global mapping that will be used to 
+#         predict the next entry to the one located in 'position'.
+#
+#         Position = <integer> - (optional) The position of the data (in the 
+#         time series) immediately before the one we want to predict.
+#
+#         Npoints = <integer> - (optional) The number of points to be used
+#         to calculate the delta-functions.
+#
+#         Poptions = <0 / 1> - (optional) The option for Printing some 
+#         analysis about the prediction.
+#
+#         OK = <integer> - (optional) The number of points to be used to 
+#         improve the prediction.
+#
+#         Nsteps = <integer> - (optional) The number of steps to forecast.
+#
+#         TG = <integer> - (optional) The type of grafic requested.
+#
+#         Ns = <integer> - (optional) The number of `ks' or points to be used 
+#         according to the type of the grafic requested.
+#
+#    - Observations:
+#         It must be understanding that although all entries to the AnalysTS 
+#         procedure are optional, the call < [> GrafiTS(); > is not an 
+#         option.
+#
+#    - Features:
+#	  This routine produces some grafics that show the behavior of the 
+#         predicted values in comparison with the real ones.
+#
+#    - Output:
+#         The Grafic requested.
+##
+
+
+if has([args],Poptions) then 
+	poptions := rhs(op(select(has,[args],Poptions))) 
+else
+	poptions := 0;
+end if;
+
+if has([args],Position) then 
+	position := rhs(op(select(has,[args],Position))) 
+end if;
+
+if has([args],Ns) then 
+	ns := rhs(op(select(has,[args],Ns))) 
+else
+	# heuristic  -  testing
+	ns := 16;
+end if;
+
+if has([args],TG) then 
+	tg := rhs(op(select(has,[args],TG))) 
+else
+	tg := 4;
+end if;
+
+
+if tg = 1 then
+        grafis := [];
+        for i from 0 to ns do
+                grafis := [op(grafis),[i,op(3,op(NIforecasTS(args,Npoints=ns,
+                Nsteps=1,OK=i)))]];
+        end do;
+end if;
+
+if tg = 2 then
+        grafis := [];
+        for i from 0 to ns do 
+                nif := op(NIforecasTS(args,Nsteps=1,Npoints=ns,OK=i));
+                grafis := [op(grafis),[i,op(1,nif)-op(2,nif)]];
+        end do;
+end if;
+
+if tg = 3 then
+        nif := NIforecasTS(args);
+        grafis := [seq([i,op(3,nif[i])],i=1..nops(nif))];
+end if;
+
+if tg = 4 then
+        grafis := [];
+        Args := remove(has,[args],Position);
+        for i to ns do 
+                nif := op(NIforecasTS(op(Args),
+                Position=position-1+i,Nsteps=1));
+                grafis := [op(grafis),[i,op(1,nif)-op(2,nif)]];
+        end do; 
+end if;
+
+
+return(display(PLOT(CURVES(grafis),COLOR(RGB,0,0,1))));
+
+end:
+###############################################################################
